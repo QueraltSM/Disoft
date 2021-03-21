@@ -110,15 +110,21 @@ class HomeScreen extends Component {
   state = {
     url: ""
   }
+  aux_messages = []
 
   constructor(props) {
     super(props);
     this.state = {
-      url: this.props.navigation.state.params.url
+      url: this.props.navigation.state.params.url,
+      messages: [],
+      toUser: ""
     }
     this.setState({url: "https://admin.dicloud.es/zonaclientes/index.asp" })
     this.setWebview()
-    //this.getNews()
+    this.getNews()
+    setInterval(() => {
+      this.getNews()
+    }, 60000);
   } 
 
   async getUser() {
@@ -136,20 +142,67 @@ class HomeScreen extends Component {
     })
   }
 
-  /*async getNews() {
-    await this.getUser()
-    var messages = [Messages]
-    const response =await axios.post("https://app.dicloud.es/getPendingNews.asp",{"appSource": "Dicloud", "aliasDb": this.alias, "user":this.user, "password": this.password, "token": this.token})
-    response.data.messages.forEach(nx => {
-      var n =  {
-        from_id: nx.from_id,
-        from: nx.from,
-        last_messages_timestamp: nx.last_messages_timestamp,
-        messages_count: nx.messages_count,
+  async setMessage(m){
+    var notified = false
+    var value = await new AsyncStorage.getItem("messages")
+    var messages = JSON.parse(value)
+    messages.forEach(x => {
+      if (x.begin_date == m.begin_date && x.nombre == m.nombre && x.msg_es == m.msg_es) {
+        notified = true
       }
-      messages.push(n);
-    });
-  }*/
+    })
+    if (!notified) {
+      alert("Nuevo mensaje de " + m.nombre + " para " + this.state.toUser + " mensaje = " + m.msg_es)
+      this.aux_messages.push(m);
+      this.setState({ messages: this.aux_messages })
+      await new AsyncStorage.setItem("messages", JSON.stringify(this.aux_messages))
+    }
+  }
+
+  async checkNews(u) {
+    this.setState({ toUser: u.user })
+    const requestOptions = {
+      method: 'POST',
+      body: JSON.stringify({aliasDb: u.alias, user: u.user, password: u.password, token:u.token, appSource: "Disoft"})
+    };
+    await fetch('https://app.dicloud.es/getPendingNewsZC.asp', requestOptions)
+      .then((response) => response.json())
+      .then((responseJson) => {
+        var messages = responseJson.messages
+        if (messages != null) {
+          messages.forEach(nx => {
+            var m =  {
+              begin_date: nx.begin_date,
+              nombre: nx.nombre,
+              msg_es: nx.msg_es
+            }
+            this.setMessage(m)
+          });
+        }
+      }).catch(() => {});
+  }
+
+  async getNews() {
+    console.log("getNews")
+    await AsyncStorage.getItem("users").then((value) => {
+      var users = JSON.parse(value)
+      if (users != null) {
+        users.forEach(i => {
+          if (i != null) {
+            var u = {
+              alias:  i.alias,
+              user:  i.user,
+              password:  i.password,
+              token:  i.token,
+              time: i.time,
+              date: i.date
+            }
+            this.checkNews(u)
+          }
+        })
+      }
+    })
+  }
 
   setWebview =  async () => {
     BackHandler.addEventListener('hardwareBackPress', this.handleBackButton);
@@ -472,7 +525,6 @@ class LoginScreen extends Component {
         var users = JSON.parse(res)
         users.forEach(nx => {
           if (nx != null) {
-            console.log("veces+")
             var u =  {
               alias: nx.alias,
               user: nx.user,
@@ -590,11 +642,10 @@ export class User {
 }
 
 export class Messages {
-  constructor(from_id, from, last_messages_timestamp, messages_count) {
-    this.from_id = from_id;
-    this.from = from;
-    this.last_messages_timestamp = last_messages_timestamp;
-    this.messages_count = messages_count;
+  constructor(begin_date, nombre, msg_es) {
+    this.begin_date = begin_date;
+    this.nombre = nombre;
+    this.msg_es = msg_es;
   }
 }
 
