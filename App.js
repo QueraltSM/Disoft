@@ -14,12 +14,13 @@ class AccountsScreen extends Component {
   state = {
     users: [User]
   }
+  aux_users = []
 
   constructor(props) {
     super(props);
     this.state = {
       users: this.props.navigation.state.params.users
-    }  
+    }
   } 
 
   handleBackButton = () => {
@@ -34,7 +35,26 @@ class AccountsScreen extends Component {
     this.props.navigation.navigate('Login');
   }
 
-  loginUser = (u) => {
+  loginUser = async (u) => {
+    var users = this.state.users
+    users.forEach(item => {
+      if (item.user == u.user) {
+        var today = new Date()
+        var updatedUser = {
+          alias:  item.alias,
+          user:  item.user,
+          password:  item.password,
+          token:  item.token,
+          time: new Date().getTime(),
+          date: ("0" + (today.getDate())).slice(-2)+ "·"+ ("0" + (today.getMonth() + 1)).slice(-2) + "·" + today.getFullYear() + " " + ("0" + (today.getHours())).slice(-2)+ ":" + ("0" + (today.getMinutes())).slice(-2)
+        }
+        this.aux_users.push(updatedUser)
+      } else {
+        this.aux_users.push(item)
+      }
+    })
+    this.setState({ users: this.aux_users })
+    await AsyncStorage.setItem("users", JSON.stringify(this.aux_users))
     var url = "https://admin.dicloud.es/zonaclientes/loginverifica.asp?company="+u.alias+"&user="+u.user+"&pass="+u.password.toLowerCase()+"&movil=si"
     this.props.navigation.push('Home',{url:url})
   }
@@ -46,13 +66,14 @@ class AccountsScreen extends Component {
           <Text style={styles.navBarHeader}>Cuentas registradas</Text>
         </View>
         <FlatList 
-        data={ this.state.users.sort((a,b) => a.time > b.time) } 
+        data={ this.state.users.sort((a,b) => a.time < b.time) } 
         renderItem={({ item, index, separators }) => (
           <TouchableOpacity
             key={item.user}
             onPress={() => this.loginUser(item)}>
             <View> 
-              <Text style={styles.headerAccounts}>{item.user} {item.date}</Text>
+              <Text style={styles.headerAccounts}>{item.user}</Text>
+              <Text style={styles.dateAccounts}>Última vez {item.date}</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -61,7 +82,7 @@ class AccountsScreen extends Component {
       />
         <View style={styles.navBar}>
         <Ionicons 
-            name="arrow-back" 
+            name="log-in-outline" 
             onPress={this.goLogin}
             size={25} 
             color="white"
@@ -274,6 +295,7 @@ class HomeScreen extends Component {
 class LoginScreen extends Component {  
 
   users = [User]
+  aux_users = [User]
   alias = ""
   user = ""
   password = ""
@@ -353,8 +375,21 @@ class LoginScreen extends Component {
       this.showAlert(error);
   }
 
-  async goHome() {
+  createUsers() {
+    var today = new Date()
+    var u = {
+      alias:  this.alias,
+      user:  this.user,
+      password:  this.password,
+      token:  this.token,
+      time: new Date().getTime(),
+      date: ("0" + (today.getDate())).slice(-2)+ "·"+ ("0" + (today.getMonth() + 1)).slice(-2) + "·" + today.getFullYear() + " " + ("0" + (today.getHours())).slice(-2)+ ":" + ("0" + (today.getMinutes())).slice(-2)
+    }
+    this.aux_users.push(u)
+  }
 
+  async goHome() {
+    this.aux_users = [User]
     await AsyncStorage.setItem('lastUser', "true");
     await AsyncStorage.setItem('alias', this.alias);
     await AsyncStorage.setItem('user', this.user);
@@ -362,38 +397,39 @@ class LoginScreen extends Component {
     await AsyncStorage.setItem('fullname', this.fullname);
     await AsyncStorage.setItem('idempresa', this.idempresa + "");
     await AsyncStorage.setItem('token', this.token);
-
     await AsyncStorage.getItem("users").then((value) => {
       var users = JSON.parse(value)
+      var actualUser = false
       if (users != null) {
-        var registered = false
         users.forEach(i => {
           if (i != null) {
-            var u = i.user 
-            if (u == this.user) {
-              registered = true
+            var u = {
+              alias:  i.alias,
+              user:  i.user,
+              password:  i.password,
+              token:  i.token,
+              time: i.time,
+              date: i.date
+            }
+            if (u.user == this.user) {
+              actualUser = true
+              this.createUsers()
+            } else {
+              this.aux_users.push(u)
             }
           }
         })
-        console.log("registered = " + registered)
-        if (!registered) {
-          var today = new Date()
-          var u = {
-            alias:  this.alias,
-            user:  this.user,
-            password:  this.password,
-            token:  this.token,
-            time: new Date().getTime(),
-            date: ("0" + (today.getDate())).slice(-2)+ "/"+ ("0" + (today.getMonth() + 1)).slice(-2) + "/" + today.getFullYear() + " " + ("0" + (today.getHours())).slice(-2)+ ":" + ("0" + (today.getMinutes())).slice(-2)
-          }
-          this.users.push(u)
+        if (!actualUser) {
+          this.createUsers()
         }
-        this.setState({ users: JSON.stringify(this.users)})
+      } else {
+        this.createUsers()
       }
     })
-    this.setState({ users: JSON.stringify(this.users) })
+    this.setState({ users: JSON.stringify(this.aux_users) })
     await AsyncStorage.setItem('users', this.state.users);
-
+    //this.setState({ users: [User] }) // Test: delete all users
+    //await AsyncStorage.setItem('users', ""); // Test: delete all users
     var url = "https://admin.dicloud.es/zonaclientes/loginverifica.asp?company="+this.alias+"&user="+this.user+"&pass="+this.password.toLowerCase()+"&movil=si"
     this.props.navigation.push('Home',{url:url})
   }
@@ -430,12 +466,13 @@ class LoginScreen extends Component {
   }
 
    goAccounts = async () => {
-      var accounts = [User]
+      var accounts = []
       var res = await AsyncStorage.getItem('users');
       if (res != null) {
         var users = JSON.parse(res)
         users.forEach(nx => {
           if (nx != null) {
+            console.log("veces+")
             var u =  {
               alias: nx.alias,
               user: nx.user,
@@ -447,8 +484,10 @@ class LoginScreen extends Component {
             accounts.push(u);
           }
         });
+        this.props.navigation.push('Accounts', {users: accounts})
+      } else {
+        this.showAlert("No has registado ninguna cuenta")
       }
-      this.props.navigation.push('Accounts', {users: accounts})
   }
   
   render() {
@@ -486,7 +525,7 @@ class LoginScreen extends Component {
           <Text style={styles.appButtonText}>Entrar</Text>
         </TouchableOpacity>  
         <TouchableOpacity onPress={this.goAccounts}>
-          <Text>Cuentas registradas</Text>
+          <Text style={styles.registeredAccounts}>Cuentas registradas</Text>
         </TouchableOpacity>  
         <View style={{alignItems: 'center', justifyContent: 'center', backgroundColor:"#337BB7", flexDirection:'row', textAlignVertical: 'center'}}>
         <Text></Text>
@@ -647,9 +686,18 @@ const styles = StyleSheet.create({
     width: 64
   },
   headerAccounts: {
-    color: '#196F3D',
+    color: '#98A406',
     textAlign:'center',
-    fontSize: 20
+    fontSize: 20,
+    fontWeight: "bold",
+    alignSelf: "center",
+    paddingTop: 20,
+  },
+  dateAccounts: {
+    color: '#98A406',
+    textAlign:'center',
+    fontSize: 17,
+    alignSelf: "center",
   },
   navBar:{
     flexDirection:'row', 
@@ -688,5 +736,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 25,
     alignSelf: "center"
+  },
+  registeredAccounts: {
+    color: '#98A406',
+    textAlign:'center',
+    fontSize: 15,
+    fontWeight: "bold",
+    alignSelf: "center",
+    paddingTop: 20,
   }
 });
