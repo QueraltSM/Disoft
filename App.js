@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-community/async-storage';
 import { BackHandler } from 'react-native';
 import axios from 'axios';
 import { FlatList } from 'react-native-gesture-handler';
+import PushNotification from 'react-native-push-notification';
 
 class AccountsScreen extends Component { 
 
@@ -108,7 +109,9 @@ class HomeScreen extends Component {
     ref: null,
   }
   state = {
-    url: ""
+    url: "",
+    messages: [],
+    toUser: ""
   }
   aux_messages = []
 
@@ -121,6 +124,7 @@ class HomeScreen extends Component {
     }
     this.setState({url: "https://admin.dicloud.es/zonaclientes/index.asp" })
     this.setWebview()
+    this.configNotifications()
     this.getNews()
     setInterval(() => {
       this.getNews()
@@ -143,19 +147,23 @@ class HomeScreen extends Component {
   }
 
   async setMessage(m){
+    this.aux_messages = []
     var notified = false
-    var value = await new AsyncStorage.getItem("messages")
-    var messages = JSON.parse(value)
-    messages.forEach(x => {
-      if (x.begin_date == m.begin_date && x.nombre == m.nombre && x.msg_es == m.msg_es) {
-        notified = true
-      }
-    })
+    var notified_messages = await new AsyncStorage.getItem("messages")
+    var messages = JSON.parse(notified_messages)
+    if (messages != null) {
+      await messages.forEach(x => {
+        if (x.begin_date == m.begin_date && x.nombre == m.nombre && x.msg_es == m.msg_es) {
+          notified = true
+        }
+      })
+    }
     if (!notified) {
-      alert("Nuevo mensaje de " + m.nombre + " para " + this.state.toUser + " mensaje = " + m.msg_es)
+      this.aux_messages = messages
       this.aux_messages.push(m);
       this.setState({ messages: this.aux_messages })
       await new AsyncStorage.setItem("messages", JSON.stringify(this.aux_messages))
+      this.pushNotification("Nuevo mensaje de " + m.nombre, m.msg_es)
     }
   }
 
@@ -183,7 +191,6 @@ class HomeScreen extends Component {
   }
 
   async getNews() {
-    console.log("getNews")
     await AsyncStorage.getItem("users").then((value) => {
       var users = JSON.parse(value)
       if (users != null) {
@@ -202,6 +209,40 @@ class HomeScreen extends Component {
         })
       }
     })
+  }
+
+  configNotifications = () => {
+    PushNotification.configure({
+      onNotification: function(notification) {},
+      permissions: {
+        alert: true,
+        badge: true,
+        sound: true,
+      },
+      requestPermissions: Platform.OS === 'ios',
+      popInitialNotification: true,
+    });
+    PushNotification.createChannel({
+      channelId: "channel-id", // (required)
+      channelName: "My channel", // (required)
+      channelDescription: "A channel to categorise your notifications", // (optional) default: undefined.
+      playSound: false, // (optional) default: true
+      soundName: "default", // (optional) See `soundName` parameter of `localNotification` function
+      importance: 4, // (optional) default: 4. Int value of the Android notification importance
+      vibrate: true, // (optional) default: true. Creates the default vibration patten if true.
+    },
+    (created) => console.log(`createChannel returned '${created}'`) // (optional) callback returns whether the channel was created, false means it already existed.
+    );
+  }
+
+  pushNotification = (title, message) => {
+    PushNotification.localNotification({
+      title: title,
+      message: message,
+      playSound: true,
+      soundName: 'default',
+      channelId: "channel-id"
+    });
   }
 
   setWebview =  async () => {
