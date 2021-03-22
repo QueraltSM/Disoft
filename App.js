@@ -9,6 +9,7 @@ import { BackHandler } from 'react-native';
 import axios from 'axios';
 import { FlatList } from 'react-native-gesture-handler';
 import PushNotification from 'react-native-push-notification';
+import BackgroundFetch from 'react-native-background-fetch';
 
 class AccountsScreen extends Component { 
 
@@ -126,8 +127,11 @@ class HomeScreen extends Component {
       news: []
     }
     this.setState({url: "https://admin.dicloud.es/zonaclientes/index.asp" })
+    console.log("URL="+this.state.url)
     this.setWebview()
+    this.getUser()
     this.configNotifications()
+    this.setBackgroundFetch()
     this.getPendingNews()
     this.getNews()
     setInterval(() => {
@@ -313,6 +317,25 @@ class HomeScreen extends Component {
       soundName: 'default',
       channelId: "channel-id"
     });
+  }
+
+  setBackgroundFetch = () => {
+    console.log("setBackgroundFetch")
+    BackgroundFetch.configure({
+      minimumFetchInterval: 15, // fetch interval in minutes
+      enableHeadless: true,
+      stopOnTerminate: false,
+      periodic: true,
+    },
+    async taskId => {
+      this.getPendingNews()
+      this.getNews()
+      BackgroundFetch.finish(taskId);
+    },
+    error => {
+      console.error('RNBackgroundFetch failed to start.');
+      },
+    );
   }
 
   setWebview =  async () => {
@@ -722,7 +745,7 @@ class MainScreen extends Component {
     });
     await new Promise(resolve => setTimeout(resolve, 2000));
     if (lastUser == "true") {
-      var url = "https://admin.dicloud.es/zonaclientes/?company="+alias+"&user="+user+"&pass="+password.toLowerCase()+"&token="+token
+      var url = "https://admin.dicloud.es/zonaclientes/loginverifica.asp?company="+alias+"&user="+user+"&pass="+password.toLowerCase()+"&token="+token+"&movil=si"
       this.props.navigation.navigate('Home',{url:url})
     } else {
       this.props.navigation.navigate('Login')
