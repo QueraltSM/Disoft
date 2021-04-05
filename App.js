@@ -127,7 +127,6 @@ class HomeScreen extends Component {
       news: []
     }
     this.setState({url: "https://admin.dicloud.es/zonaclientes/index.asp" })
-    console.log("URL="+this.state.url)
     this.setWebview()
     this.getUser()
     this.configNotifications()
@@ -249,9 +248,7 @@ class HomeScreen extends Component {
     await fetch('https://app.dicloud.es/getNews.asp', requestOptions)
       .then((response) => response.json())
       .then((responseJson) => {
-        console.log(responseJson)
         var news = responseJson.usernews
-        console.log("news = " + news)
         if (news != null) {
           news.forEach(nx => {
             var n =  {
